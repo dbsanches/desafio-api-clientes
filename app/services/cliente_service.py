@@ -2,66 +2,58 @@
 
 from app import db
 from ..models.cliente_model import Cliente
-from ..views.cliente_schema import cliente_schema, clientes_schema
+# Removemos a importação dos schemas, o service não precisa mais deles
+# from ..views.cliente_schema import cliente_schema, clientes_schema
 
 class ClienteService:
-    
-    # Não precisamos mais do __init__ com o banco em memória!
 
-    def create(self, data):
+    def create(self, novo_cliente: Cliente): # <-- MUDANÇA: Recebe o objeto Cliente
         """
         Cria um novo cliente.
-        O Marshmallow (schema.load) faz a validação e cria o objeto Cliente.
         """
-        # Deserializa e valida os dados de entrada
-        novo_cliente = cliente_schema.load(data)
+        # A validação e deserialização JÁ FORAM FEITAS pelo controller
         
-        # Adiciona ao banco de dados
+        # Apenas adicionamos o objeto recebido
         db.session.add(novo_cliente)
         db.session.commit()
         
-        # Serializa e retorna o objeto criado
-        return cliente_schema.dump(novo_cliente)
+        return novo_cliente # Retorna o objeto
     
     def get_all(self):
-        """ Retorna todos os clientes. """
-        todos_clientes = Cliente.query.all()
-        # Serializa a lista de objetos para JSON
-        return clientes_schema.dump(todos_clientes)
+        return Cliente.query.all() # <-- MUDANÇA: Retorna a lista de OBJETOS
 
     def get_by_id(self, id):
-        """ Retorna um cliente pelo ID. """
-        cliente = Cliente.query.get(id) # .get() é um atalho para buscar pela Chave Primária
-        return cliente_schema.dump(cliente)
+        return Cliente.query.get(id) # <-- MUDANÇA: Retorna o OBJETO ou None
 
-    def update(self, id, data):
+    def update(self, id, data_update: dict): # <-- MUDANÇA: Renomeado para clareza
         """ Atualiza um cliente existente. """
         cliente = Cliente.query.get(id)
         if not cliente:
-            return None # Não encontrado
+            return None
 
-        # Carrega os novos dados no objeto existente (instance=cliente)
-        # partial=True permite a atualização parcial (sem enviar todos os campos)
-        cliente_atualizado = cliente_schema.load(data, instance=cliente, partial=True)
+        # Atualiza os campos do objeto 'cliente' com os dados do dicionário
+        # (Aqui mantemos o dicionário 'data' por ser mais fácil para update parcial)
+        if 'nome' in data_update:
+            cliente.nome = data_update['nome']
+        if 'email' in data_update:
+            # (Aqui poderíamos adicionar a validação de email duplicado)
+            cliente.email = data_update['email']
+        if 'telefone' in data_update:
+            cliente.telefone = data_update['telefone']
         
         db.session.commit()
-        return cliente_schema.dump(cliente_atualizado)
+        return cliente # Retorna o objeto atualizado
 
     def delete(self, id):
-        """ Deleta um cliente. """
         cliente = Cliente.query.get(id)
         if cliente:
             db.session.delete(cliente)
             db.session.commit()
             return True
-        return False # Não encontrado
+        return False
 
     def get_by_name(self, nome):
-        """ Busca clientes por nome (case-insensitive). """
-        # .ilike() faz uma busca "like" ignorando maiúsculas/minúsculas
-        clientes = Cliente.query.filter(Cliente.nome.ilike(f'%{nome}%')).all()
-        return clientes_schema.dump(clientes)
+        return Cliente.query.filter(Cliente.nome.ilike(f'%{nome}%')).all() # <-- MUDANÇA: Retorna OBJETOS
 
     def count(self):
-        """ Conta o número total de clientes. """
-        return Cliente.query.count()
+        return Cliente.query.count() # (Sem mudança)
