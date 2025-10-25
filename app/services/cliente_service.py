@@ -1,78 +1,67 @@
 # /api-clientes-flask/app/services/cliente_service.py
 
-# (Na Fase 2, esta classe importará o Model)
-# from ..models.cliente_model import Cliente
-# from .. import db
+from app import db
+from ..models.cliente_model import Cliente
+from ..views.cliente_schema import cliente_schema, clientes_schema
 
 class ClienteService:
     
-    # --- Início da Fase 1: Persistência em Memória ---
-    def __init__(self):
-        # Simulação de um banco de dados em memória
-        self.clientes_db = {
-            1: {"id": 1, "nome": "Cliente Exemplo 1", "email": "c1@email.com", "telefone": "11999990001"},
-            2: {"id": 2, "nome": "Cliente Exemplo 2", "email": "c2@email.com", "telefone": "11999990002"}
-        }
-        self.next_id = 3 # Próximo ID a ser usado
-    
-    def _validar_cliente(self, data):
-        """Valida os dados de entrada."""
-        if 'nome' not in data or not data['nome']:
-            raise Exception("O campo 'nome' é obrigatório.")
-        if 'email' not in data or not data['email']:
-            raise Exception("O campo 'email' é obrigatório.")
-        
-        # Valida email único
-        email = data['email']
-        if any(c['email'] == email for c in self.clientes_db.values()):
-            raise Exception("Este email já está cadastrado.")
+    # Não precisamos mais do __init__ com o banco em memória!
 
     def create(self, data):
-        self._validar_cliente(data)
+        """
+        Cria um novo cliente.
+        O Marshmallow (schema.load) faz a validação e cria o objeto Cliente.
+        """
+        # Deserializa e valida os dados de entrada
+        novo_cliente = cliente_schema.load(data)
         
-        novo_cliente = {
-            "id": self.next_id,
-            "nome": data['nome'],
-            "email": data['email'],
-            "telefone": data.get('telefone') # .get() permite valor opcional
-        }
-        self.clientes_db[self.next_id] = novo_cliente
-        self.next_id += 1
-        return novo_cliente
+        # Adiciona ao banco de dados
+        db.session.add(novo_cliente)
+        db.session.commit()
+        
+        # Serializa e retorna o objeto criado
+        return cliente_schema.dump(novo_cliente)
     
     def get_all(self):
-        return list(self.clientes_db.values())
+        """ Retorna todos os clientes. """
+        todos_clientes = Cliente.query.all()
+        # Serializa a lista de objetos para JSON
+        return clientes_schema.dump(todos_clientes)
 
     def get_by_id(self, id):
-        return self.clientes_db.get(id) # Retorna None se não achar
+        """ Retorna um cliente pelo ID. """
+        cliente = Cliente.query.get(id) # .get() é um atalho para buscar pela Chave Primária
+        return cliente_schema.dump(cliente)
 
     def update(self, id, data):
-        if id not in self.clientes_db:
+        """ Atualiza um cliente existente. """
+        cliente = Cliente.query.get(id)
+        if not cliente:
             return None # Não encontrado
 
-        # Valida email único (se o email estiver sendo alterado)
-        if 'email' in data and data['email'] != self.clientes_db[id]['email']:
-             if any(c['email'] == data['email'] for c in self.clientes_db.values()):
-                raise Exception("Este email já está cadastado por outro usuário.")
-
-        cliente = self.clientes_db[id]
-        cliente['nome'] = data.get('nome', cliente['nome'])
-        cliente['email'] = data.get('email', cliente['email'])
-        cliente['telefone'] = data.get('telefone', cliente['telefone'])
+        # Carrega os novos dados no objeto existente (instance=cliente)
+        # partial=True permite a atualização parcial (sem enviar todos os campos)
+        cliente_atualizado = cliente_schema.load(data, instance=cliente, partial=True)
         
-        self.clientes_db[id] = cliente
-        return cliente
+        db.session.commit()
+        return cliente_schema.dump(cliente_atualizado)
 
     def delete(self, id):
-        if id in self.clientes_db:
-            del self.clientes_db[id]
+        """ Deleta um cliente. """
+        cliente = Cliente.query.get(id)
+        if cliente:
+            db.session.delete(cliente)
+            db.session.commit()
             return True
         return False # Não encontrado
 
     def get_by_name(self, nome):
-        # Busca case-insensitive
-        return [c for c in self.clientes_db.values() if nome.lower() in c['nome'].lower()]
+        """ Busca clientes por nome (case-insensitive). """
+        # .ilike() faz uma busca "like" ignorando maiúsculas/minúsculas
+        clientes = Cliente.query.filter(Cliente.nome.ilike(f'%{nome}%')).all()
+        return clientes_schema.dump(clientes)
 
     def count(self):
-        return len(self.clientes_db)
-    # --- Fim da Fase 1 ---
+        """ Conta o número total de clientes. """
+        return Cliente.query.count()
