@@ -1,0 +1,13 @@
+# /api-clientes-flask/.gitignore
+
+# Ambientes Virtuais
+venv/
+*.venv
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Arquivos de IDE (Opcional)
+.idea/
+.vscode/
